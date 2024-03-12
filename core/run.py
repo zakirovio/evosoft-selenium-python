@@ -6,7 +6,7 @@ from sys import argv
 util, command, param = argv
 
 if __name__ == '__main__':
-    assert util == "manage.py"
+    assert util == "run.py"
     assert command == "start"
 
     if param == "nseindia":
