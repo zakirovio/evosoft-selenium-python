@@ -1,6 +1,6 @@
+from config import settings
 import csv
 from typing import List
-from config import settings
 
 
 def write_data_to_csv(path: str, rows: List[tuple], headers: tuple) -> None:

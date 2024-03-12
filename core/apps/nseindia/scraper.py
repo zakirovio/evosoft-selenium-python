@@ -1,6 +1,5 @@
 from apps.nseindia.utils import write_data_to_csv
 from config import settings
-import datetime
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
@@ -10,10 +9,44 @@ from typing import List
 from webdriver_manager.chrome import ChromeDriverManager
 
 
-def get_data(url: str) -> List[tuple]:
-    # Не забываем применить опции
-    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=settings.options)
+def imitate_user(driver: webdriver) -> None:
+    settings.stream_logger.info(msg="IMITATE A REAL USER")
+    # Перемещаемся домой
+    home = driver.find_element(by=By.ID, value="link_0")
+    action = ActionChains(driver)
+    action.move_to_element(home)
+    action.perform()
+    home.click()
+    time.sleep(1)
 
+    # Скроллим до таблицы топ 5
+    top5 = driver.find_element(by=By.CLASS_NAME, value="right_box")
+    driver.execute_script("arguments[0].scrollIntoView();", top5)
+    view_all = driver.find_element(by=By.LINK_TEXT, value="View All")
+    view_all.click()
+    time.sleep(1)
+
+    # Выбираем 'Показать все'
+    select = driver.find_element(by=By.CLASS_NAME, value="custom_select")
+    action = ActionChains(driver)
+    action.move_to_element(select)
+    action.perform()
+    select.click()
+    time.sleep(1)
+
+    # Выбираем нужную опцию ы выполняем скрипт
+    option = driver.find_element(by=By.XPATH, value="//option[@data-nse-translate-symbol='NIFTY ALPHA 50']")
+    option.click()
+    driver.execute_script("arguments[0].click();", option)
+    time.sleep(settings.MAX_AWAIT_TIME)
+
+    # Скроллим до конца страницы
+    notes = driver.find_element(by=By.XPATH, value="//div[@class='note_container']")
+    driver.execute_script("arguments[0].scrollIntoView();", notes)
+    time.sleep(1)
+
+
+def get_data(url: str, driver: webdriver) -> List[tuple]:
     driver.get(url)
     driver.maximize_window()
     time.sleep(1)  # Даем немного прогрузиться
@@ -39,7 +72,7 @@ def get_data(url: str) -> List[tuple]:
     option = driver.find_element(by=By.ID, value="all")
     option.click()
 
-    # js скрипт инициатор при клике на опцию со всеми данными отправляет запрос на АПИ с нужными токенами
+    # js скрипт инициатор при клике на нужную опцию отправляет запрос на АПИ с нужными токенами
     driver.execute_script('arguments[0].click();', option)
     time.sleep(settings.MAX_AWAIT_TIME)  # js делает запрос на который уходит некоторое время; можно поменять
 
@@ -58,21 +91,27 @@ def get_data(url: str) -> List[tuple]:
             data.append(row)
 
     time.sleep(1)
+
     return data
 
 
 def main() -> None:
     main_url = "https://www.nseindia.com/"
+    # Не забываем применить опции!
+    browser = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=settings.options)
     table_headers = ("Имя", "цена")
     counter = 0
 
     while True:
         try:
-            data = get_data(main_url)
+            data = get_data(main_url, browser)
             write_data_to_csv(settings.NSEINDIA_FILE_PATH, data, table_headers)
+            imitate_user(browser)
             break
         except Exception as e:
-            print(f"[WARNING] {datetime.datetime.now().strftime("%H:%M:%S %d-%m-%Y")} {e}")
+            settings.stream_logger.warning(msg=f"EXCEPTIONS RAISES: {e}")
             if counter >= settings.MAX_RETRIES:
                 break
             counter += 1
+    # !
+    browser.close()

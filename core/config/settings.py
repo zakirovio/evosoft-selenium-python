@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent  # core directory
 MAX_RETRIES: int = 5
 MAX_AWAIT_TIME: int = 5
 NSEINDIA_FILE_PATH = f"{BASE_DIR}/data/nseindia.csv"
-ELONMUSK_FILE_PATH = ""
+ELONMUSK_FILE_PATH = f"{BASE_DIR}/data/elonmusk.log"
 
 api_link: str = "https://www.nseindia.com/api/market-data-pre-open?key={}"
 
@@ -42,7 +42,7 @@ LOGGING = {
             "class": "logging.FileHandler",
             "level": "DEBUG",
             "formatter": "simple",
-            "filename": f"{BASE_DIR}/data/elonmusk.log"
+            "filename": ELONMUSK_FILE_PATH
         }
     },
     "loggers": {
