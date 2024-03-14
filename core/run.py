@@ -14,8 +14,8 @@ if __name__ == '__main__':
         nseindia()
         settings.stream_logger.info(msg="NSEINDIA APP IS COMPLETED")
     elif param == "elonmusk":
-        settings.stream_logger.info(msg="NSEINDIA APP IS STARTING")
+        settings.stream_logger.info(msg="ELONMUSK APP IS STARTING")
         elonmusk()
-        settings.stream_logger.info(msg="NSEINDIA APP IS COMPLETED")
+        settings.stream_logger.info(msg="ELONMUSK APP IS COMPLETED")
     else:
-        settings.stream_logger.error(msg="UNKNOWN COMMAND")
+        settings.stream_logger.error(msg="UNKNOWN PARAMETER")
