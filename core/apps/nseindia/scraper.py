@@ -82,6 +82,7 @@ def get_data(url: str, driver: webdriver) -> List[tuple]:
     tuples = table.find_elements(by=By.TAG_NAME, value="tr")
 
     data = []
+    settings.stream_logger.info(msg="IN PROGRESS")
     for item in tuples[1:]:
         full = item.text.strip().split()  # Строка полностью
         name = full[0]
