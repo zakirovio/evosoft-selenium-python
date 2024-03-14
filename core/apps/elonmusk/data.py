@@ -29,7 +29,7 @@ headers = {
         'sec-fetch-mode': 'cors',
         'sec-fetch-site': 'same-site',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        # 'x-client-transaction-id': 'M+/tFbufD327j2MTnNSOk3PmxkBfA2aBOMZNS1nNoUhwU+FsZv3EQy3PoGbA9UWKRitCkDJHUfJzCww/eUtD984+oSB1Mg',
+        'x-client-transaction-id': 'M+/tFbufD327j2MTnNSOk3PmxkBfA2aBOMZNS1nNoUhwU+FsZv3EQy3PoGbA9UWKRitCkDJHUfJzCww/eUtD984+oSB1Mg',
         'x-guest-token': '',
         'x-twitter-active-user': 'yes',
         'x-twitter-client-language': 'ru',

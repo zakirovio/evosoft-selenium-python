@@ -84,6 +84,7 @@ def get_data(url: str, driver: webdriver) -> List[tuple]:
     data = []
     settings.stream_logger.info(msg="IN PROGRESS")
     for item in tuples[1:]:
+        # item: WebElement содержит ссылку на элемент, поэтому перебор занимает время...
         full = item.text.strip().split()  # Строка полностью
         name = full[0]
         if name != "Total":

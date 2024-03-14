@@ -127,6 +127,8 @@ def check_proxy():
 
 
 def main():
+    if not settings.PROXY:
+        settings.requests_proxies = None
     check_proxy()
     s, h = get_auth_tokens()
     raw_data = get_user_data(s, h)
