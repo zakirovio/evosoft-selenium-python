@@ -4,6 +4,7 @@ from pathlib import Path
 from selenium.webdriver import ChromeOptions
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # core directory
+WRITE_TO = False
 MAX_RETRIES: int = 5
 MAX_AWAIT_TIME: int = 5
 MAX_VERIFY_TIME: int = 60
@@ -19,11 +20,8 @@ PROXY_PORT = 9240
 PROXY_USER = config("PROXY_USERNAME")
 PROXY_PASS = config("PROXY_PASSWORD")
 
-seleniumwire_options = {
-    "proxy": {
-        "http": f"https://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
-        "verify_ssl": False,
-    },
+requests_proxies = {
+    "https": f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
 }
 
 # nseindia app
