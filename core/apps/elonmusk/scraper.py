@@ -1,125 +1,133 @@
+from apps.elonmusk.data import (common, confirm_data, check_data, csrf_change_data, domain, headers, flow_data, json_data, login_data,
+                                password_data, elon_params)
 from config import settings
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-import random
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import NoSuchElementException
-from seleniumwire import webdriver as alterdriver
+import json
+import requests
 import time
 
 
-def posts_handler(browser: webdriver, post_link: str) -> str:
-    author = "elonmusk"
-    domain = "https://twitter.com/"
+def get_auth_tokens():
+    """Аутентификация осуществляется в несколько 'flows'"""
+    session = requests.session()
+    session.get(url="https://twitter.com/i/flow/login", headers=common,
+                proxies=settings.requests_proxies
+                )  # set guest_id cookie
 
-    browser.get(post_link)
-    time.sleep(settings.MAX_AWAIT_TIME)
+    # Update gt token
+    time.sleep(1)
+    guest = session.post(
+        "https://api.twitter.com/1.1/guest/activate.json", headers=headers,
+        proxies=settings.requests_proxies
+    )
+    gt = guest.json().get("guest_token")
+    headers["x-guest-token"] = gt
 
-    # Сбор текста
-    text = "post with no text"
-    if author not in post_link:
-        author = "repost"
-    try:
-        text_div = browser.find_element(by=By.XPATH, value="//div[@class='css-1rynq56 r-bcqeeo r-qvutc0 r-37j5jr r-1inkyih r-16dba41 r-bnwqim r-135wba7']")
-        text = text_div.text.strip().replace("\n", " ")
-    except NoSuchElementException:
-        pass
+    time.sleep(1)
+    session.post(
+        "https://api.twitter.com/1.1/onboarding/task.json?flow_name=login", headers=headers,
+        json=flow_data, proxies=settings.requests_proxies
+    )  # set att cookie
 
-    # Поиск комментов: к сожалению фронтенд не дает фильтровать комменты по дате
-    comments = browser.find_elements(by=By.XPATH, value="//a[@class='css-1rynq56 r-bcqeeo r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-xoduu5 r-1q142lx r-1w6e6rj r-9aw3ui r-3s2u2q r-1loqt21']")
-    commentators = []
-    for item in comments[0:3]:
-        commentators.append(domain + item.get_attribute("href").split("/")[3])
+    time.sleep(1)
+    session.get("https://twitter.com/i/js_inst?c_name=ui_metrics", headers=common,
+                proxies=settings.requests_proxies
+                )  # set session_id cookie
 
-    return f"Author: {author} Text: {text} Commentators: {', '.join(commentators)}"
+    time.sleep(1)
+    # Auth flows
+    task_1 = session.post(
+        'https://api.twitter.com/1.1/onboarding/task.json', params={'flow_name': 'login'},
+        headers=headers, json=flow_data, proxies=settings.requests_proxies
+    )  # init
+    flow_token = task_1.json()["flow_token"]
+    json_data["flow_token"] = flow_token
+    settings.stream_logger.debug(msg=flow_token)
+
+    time.sleep(1)
+    task_2 = session.post('https://api.twitter.com/1.1/onboarding/task.json', headers=headers,
+                          json=json_data, proxies=settings.requests_proxies
+                          )
+    flow_token = task_2.json()["flow_token"]
+    login_data["flow_token"] = flow_token
+    settings.stream_logger.debug(msg=flow_token)
+
+    time.sleep(1)
+    task_3 = session.post('https://api.twitter.com/1.1/onboarding/task.json', headers=headers,
+                          json=login_data, proxies=settings.requests_proxies
+                          )
+    flow_token = task_3.json()["flow_token"]
+    password_data["flow_token"] = flow_token
+    settings.stream_logger.debug(msg=flow_token)
+
+    time.sleep(1)
+    task_4 = session.post('https://api.twitter.com/1.1/onboarding/task.json', headers=headers,
+                          json=password_data, proxies=settings.requests_proxies
+                          )
+    flow_token = task_4.json()["flow_token"]
+    check_data["flow_token"] = flow_token
+    settings.stream_logger.debug(msg=flow_token)
+
+    time.sleep(1)
+    task_5 = session.post(
+        'https://api.twitter.com/1.1/onboarding/task.json', headers=headers,
+        json=check_data, proxies=settings.requests_proxies
+    )  # by default set short c0t and auth token, but to be exceptions
+    flow_token = task_5.json()["flow_token"]
+    settings.stream_logger.debug(msg=flow_token)
+
+    # При попытке войти в профиль с другого прокси, обычно требуется двухфакторка
+    if task_5.cookies.get("auth_token") is None:
+        confirm_data["flow_token"] = flow_token
+        # Нужно будет ввести код из письма, как можно быстрее, так ивент имеет срок годности
+        code = input("Введите код подтверждения из письма: ")
+        confirm_data["subtask_inputs"][0]["enter_text"]["text"] = code
+        confirm_task = session.post(
+            "https://api.twitter.com/1.1/onboarding/task.json", headers=headers,
+            json=confirm_data, proxies=settings.requests_proxies
+        )
+        print("OK", confirm_task.cookies.get("c0t"))
+
+    time.sleep(1)
+    session.get('https://api.twitter.com/graphql/W62NnYgkgziw9bwyoVht0g/Viewer', params=csrf_change_data,
+                headers=headers,proxies=settings.requests_proxies
+                )  # set full csrf cookie
+
+    # Update main headers
+    headers.update({'x-csrf-token': session.cookies.get("ct0")})
+    return session, headers
 
 
-def get_posts_links(browser: webdriver, login_view: str, elon_view: str) -> list[str]:
-    # Login
+def parse_json(data: list[dict]):
+    for tweet in data:
+        if "tweet" in tweet["entryId"] and "promoted" not in tweet["entryId"]:
+            legacy = tweet["content"]["itemContent"]["tweet_results"]["result"].get("legacy")
+            if legacy:
+                text = legacy["full_text"].split("\n")[0].split("https")[0]
+                settings.file_logger.info(msg=text)
 
-    browser.maximize_window()
-    browser.get(login_view)
-    time.sleep(settings.MAX_AWAIT_TIME)  # Из-за проксирования скрипт может грузиться довольно долго
 
-    input_field = browser.find_element(by=By.XPATH, value="//input[@autocomplete='username']")
-    input_field.send_keys(settings.T_USERNAME)
+def get_user_data(s: requests.Session, auth: dict) -> list:
+    response = s.get(
+        'https://twitter.com/i/api/graphql/eS7LO5Jy3xgmd3dbL044EA/UserTweets',
+        params=elon_params,
+        headers=auth,
+        proxies=settings.requests_proxies
+    )
+    if settings.WRITE_TO:
+        with open("temp.json", 'w', encoding='utf-8') as file:
+            json.dump(response.json(), file, indent=4, ensure_ascii=False)
 
-    submit_button = browser.find_element(by=By.XPATH, value="//div[@class='css-175oi2r r-sdzlij r-1phboty r-rs99b7 r-lrvibr r-ywje51 r-usiww2 r-13qz1uu r-2yi16 r-1qi8awa r-ymttw5 r-1loqt21 r-o7ynqc r-6416eg r-1ny4l3l']")
-    webdriver.ActionChains(browser).move_to_element(submit_button).click(submit_button).perform()
-    time.sleep(settings.MAX_AWAIT_TIME)  # работает скрипт
+    tweets = response.json()["data"]["user"]["result"]["timeline_v2"]["timeline"]["instructions"][1]["entries"]
+    return tweets
 
-    password_field = browser.find_element(by=By.XPATH, value="//input[@type='password']")
-    password_field.send_keys(settings.T_PASSWORD)
-    time.sleep(0.5)  # поле активируется только после ввода
 
-    submit_button = browser.find_element(by=By.XPATH, value="//div[@class='css-175oi2r r-sdzlij r-1phboty r-rs99b7 r-lrvibr r-19yznuf r-64el8z r-1dye5f7 r-1loqt21 r-o7ynqc r-6416eg r-1ny4l3l']")
-    webdriver.ActionChains(browser).move_to_element(submit_button).click(submit_button).perform()
-    time.sleep(settings.MAX_AWAIT_TIME)
-
-    # если поставить прокси с отличающимся от прошлого логина местоположением, выскочит двухфакторка
-    try:
-        verify = browser.find_element(By.XPATH, "//h1[@class='css-1rynq56 r-bcqeeo r-qvutc0 r-37j5jr r-1yjpyg1 r-ueyrd6 r-b88u0q']")
-    except NoSuchElementException:
-        verify = None
-    if verify is not None:
-        time.sleep(settings.MAX_VERIFY_TIME)  # достаточное время, чтобы ввести проверочный код | 60 s
-
-    # Страница Илона Муска
-    browser.get(elon_view)
-    time.sleep(settings.MAX_AWAIT_TIME)
-    point = browser.find_element(by=By.XPATH, value="//div[@class='css-1rynq56 r-bcqeeo r-qvutc0 r-37j5jr r-n6v787 r-1cwl3u0 r-16dba41 r-hrzydr r-j2kj52']")
-    actions = ActionChains(browser)
-    actions.move_to_element(point)
-
-    # фронтенд построен хитро; посты загружаются динамически и каждый скролл меняет состояние элементов;
-    # т.е на место старых постов грузятся новые и на странице активны всегда 5 - 15 постов не более;
-    # настроил скролл ниже, что грузит именно последние 8 - 15 постов;
-    for i in range(10):
-        pix = random.randint(150, 250)
-        browser.execute_script(f"window.scrollBy(0, {pix});")
-        time.sleep(1)
-    # через прокси во время теста все жестко тормозило, дадим больше
-    time.sleep(random.randint(5, 10))  # чтобы все посты подгрузились;
-
-    posts = browser.find_elements(by=By.XPATH, value="//a[@class='css-1rynq56 r-bcqeeo r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-xoduu5 r-1q142lx r-1w6e6rj r-9aw3ui r-3s2u2q r-1loqt21']")
-    settings.stream_logger.debug(msg=f"Posts count: {len(posts)}")
-
-    links = []
-    for item in posts:
-        links.append(item.get_attribute("href"))
-
-    return links
+def check_proxy():
+    r = requests.get(domain, headers=common, proxies=settings.requests_proxies)
+    settings.stream_logger.debug(msg=f"PROXY STATUS {r.status_code}")
 
 
 def main():
-    counter = 0
-    login = "https://twitter.com/i/flow/login/"
-    elon = "https://twitter.com/elonmusk/"
-
-    if settings.PROXY:
-        proxy_options = settings.seleniumwire_options
-
-        driver = alterdriver.Chrome(
-            options=settings.options,
-            seleniumwire_options=proxy_options)
-    else:
-        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=settings.options)
-
-    while True:
-        try:
-            links = get_posts_links(driver, login, elon)
-            for link in links:
-                message = posts_handler(driver, link)
-                settings.file_logger.info(msg=message)
-                settings.stream_logger.debug(msg=f"GET MESSAGE FROM {link}: SUCCESS")
-            settings.stream_logger.debug(msg=f"ALL MESSAGES ARE SUCCESSFULLY RECEIVED")
-            break
-        except Exception as e:
-            settings.stream_logger.warning(msg=f"EXCEPTIONS RAISES: {e}")
-            if counter >= settings.MAX_RETRIES:
-                break
-            counter += 1
-
-    driver.close()
+    check_proxy()
+    s, h = get_auth_tokens()
+    raw_data = get_user_data(s, h)
+    parse_json(data=raw_data)
